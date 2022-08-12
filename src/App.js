@@ -1,6 +1,30 @@
 // import logo from './logo.svg';
 import "./App.css";
-import { useReducer } from "react";
+import { useEffect, useReducer } from "react";
+import { nanoid } from "nanoid";
+import { useQuery, useMutation, gql } from "@apollo/client";
+
+const GET_TODOS = gql`
+  query todos {
+    todos {
+      id
+      text
+      status
+      update_ctr
+    }
+  }
+`;
+
+const ADD_TODO = gql`
+  mutation addTodo($text: String!) {
+    addTodo(text: $text) {
+      id
+      text
+      status
+      update_ctr
+    }
+  }
+`;
 
 const Header = (props) => {
   return (
@@ -9,63 +33,7 @@ const Header = (props) => {
     </header>
   );
 };
-const ToDoList = (props) => {
-  const onComplete = (index) => {
-    console.log("index: ", index);
-    props.dispatch({ type: "completeTodo", payload: { index } });
-  };
 
-  const onDelete = (index) => {
-    console.log("index: ", index);
-    props.dispatch({ type: "deleteTodo", payload: { index } });
-  };
-
-  const onChangeText = (index, text) => {
-    console.log("index: ", index);
-    props.dispatch({ type: "changeTodo", payload: { index, text } });
-  }; 
-  return (
-    <>
-      {props.todos.map((itm, index) => {
-        return (
-          <li
-            key={index}
-            className={itm.status === "COMPLETED" ? "completed" : ""}
-          >
-            <div className="view">
-              <input
-                className="toggle1"
-                type="checkbox"
-                checked={itm.status === "COMPLETED" ? true : false}
-                onChange={() => {
-                  onComplete(index);
-                }}
-              />
-              {itm.status === "COMPLETED" ? (
-                <label>{itm.text}</label>
-              ) : (
-                <input
-                  className="edit"
-                  value={itm.text}
-                  onChange={(evt) => {
-                    console.log(evt.target.value);
-                    onChangeText(index, evt.target.value);
-                  }}
-                />
-              )}
-              <button
-                className="destroy"
-                onClick={() => {
-                  onDelete(index);
-                }}
-              ></button>
-            </div>
-          </li>
-        );
-      })}
-    </>
-  );
-};
 const FILTER_ITEMS = {
   ALL: { title: "All" },
   ACTIVE: { title: "Active" },
@@ -73,21 +41,17 @@ const FILTER_ITEMS = {
 };
 
 const Filter = (props) => {
-  const {
-    titleForAll,
-    titleForActive,
-    titleForCompleted,
-    selected,
-    onFilterTodoListByStatus,
-  } = props;
-  <>{console.log("Last SelectedFilter: ", selected)}</>;
+  const { titleForAll, titleForActive, titleForCompleted, selected } = props;
+
+ 
+
   return (
     <ul className="filters">
       <li>
         <a
-          className={selected === "ALL" ? "selected" : ""}
+          className={selected === "" ? "selected" : ""}
           href="#/"
-          onClick={() => onFilterTodoListByStatus("ALL")}
+          onClick={() => onchange("")}
         >
           {titleForAll ?? FILTER_ITEMS["ALL"].title}
         </a>
@@ -96,7 +60,7 @@ const Filter = (props) => {
         <a
           className={selected === "ACTIVE" ? "selected" : ""}
           href="#/"
-          onClick={() => onFilterTodoListByStatus("ACTIVE")}
+          onClick={() => onchange("ACTIVE")}
         >
           {titleForActive ?? FILTER_ITEMS["ACTIVE"].title}
         </a>
@@ -105,7 +69,7 @@ const Filter = (props) => {
         <a
           className={selected === "COMPLETED" ? "selected" : ""}
           href="#/completed"
-          onClick={() => onFilterTodoListByStatus("COMPLETED")}
+          onClick={() => onchange("COMPLETED")}
         >
           {titleForCompleted ?? FILTER_ITEMS["COMPLETED"].title}
         </a>
@@ -127,11 +91,11 @@ const initialData = {
     //   text: "Learn Javascript",
     // },
   ],
-  filterTodos: [],
+
   titleForAll: "All",
   titleForActive: "Active",
   titleForCompleted: "Completed",
-  selectedFilter: "ALL",
+  selectedFilter: "",
 };
 
 function reducer(state, action) {
@@ -142,68 +106,62 @@ function reducer(state, action) {
 
     case "addTodo": {
       let _todos = [...state.todos];
-      let _filterObject = [...state.filterTodos];
-      // const _index = action.payload.index
-      //test data by output console log
-      console.log("Todos Object: ", _todos);
-      console.log("Action Payload Text: ", action.payload.newTodoText);
-      console.log("Filter Object: ", _filterObject);
-
+      //let _filterObject = [...state.filterTodos];
       //get the typing text (action->payload->text)
-      let _text = action.payload.newTodoText;
-      const _todo = { text: _text, status: "ACTIVE" };
+      let _text = action.payload.text;
+      const newTodo = { text: _text, status: "ACTIVE", id: nanoid() };
+      _todos.splice(_todos.length, 0, newTodo);
 
-      _todos.splice(_todos.length, 0, _todo);
-      return { ...state, todos: _todos, filterTodos: _todos, newTodoText: "" };
+      return { ...state, todos: _todos, newTodoText: "" };
     }
 
     case "deleteTodo": {
       let _todos = [...state.todos];
-      const _index = action.payload.index;
-      // const _todo = { ..._todos[_index], status: 'COMPLETED' }
+      const _id = action.payload.id;
+      const _index = _todos.findIndex((item) => item.id === _id);
 
       _todos.splice(_index, 1);
-      return { ...state, todos: _todos, filterTodos: _todos };
+      return { ...state, todos: _todos };
     }
 
     case "completeTodo": {
       let _todos = [...state.todos];
-      const _index = action.payload.index;
+      const _id = action.payload.id;
+      const _index = _todos.findIndex((item) => item.id === _id);
       const _todo = { ..._todos[_index], status: "COMPLETED" };
 
       _todos.splice(_index, 1, _todo);
-      return { ...state, todos: _todos, filterTodos: _todos };
+      return { ...state, todos: _todos };
     }
 
     case "changeTodo": {
       //index, text
       let _todos = [...state.todos];
-      const _index = action.payload.index;
-      const _todo = { ..._todos[_index], text: action.payload.text };
+      const _id = action.payload.id;
+      const _index = _todos.findIndex((item) => item.id === _id);
+      const _text = action.payload.text;
+      const _todo = { ..._todos[_index], text: _text };
 
       _todos.splice(_index, 1, _todo);
-      return { ...state, todos: _todos, filterTodos: _todos };
+      return { ...state, todos: _todos };
     }
 
-    case "clearTodo": {
-      let _todos = [...state.todos];
-      //Filter out the completed
-      _todos = _todos.filter((c) => c.status !== "COMPLETED");
-      console.log("After Filter Completed Task :", _todos);
-      return { ...state, todos: _todos, filterTodos: _todos };
+    case "clearComplete": { 
+      let _todos = [...state.todos].filter(
+        (item) => item.status !== "COMPLETED"
+      );
+      return { ...state, todos: _todos };
     }
 
-    case "filterTodoListByStatus": {
-      let _todos = [...state.todos];
-
-      let _selectedFilter = action.payload.selectedFilter;
-      console.log("Come into case,status is: ", _selectedFilter);
-
-      _todos = _todos.filter((s) => s.status === _selectedFilter);
-
-      console.log("TodoList After Filter: ", _todos);
-      return { ...state, filterTodos: _todos, selectedFilter: _selectedFilter };
+    case "setSelectedFilter": {
+      return { ...state, selectedFilter: action.payload };
     }
+
+    case "setData": {
+      let _todos = [...action.payload];
+      return { ...state, todos: _todos };
+    }
+
     default:
       throw new Error();
   }
@@ -211,6 +169,8 @@ function reducer(state, action) {
 
 function App() {
   const [state, dispatch] = useReducer(reducer, initialData);
+  const { data, refetch } = useQuery(GET_TODOS);
+  const [addTodo] = useMutation(ADD_TODO);
 
   const onChangeNewTodoText = (evt) => {
     dispatch({ type: "setNewTodoText", payload: evt.target.value });
@@ -219,38 +179,43 @@ function App() {
   const onAddTodo = (evt) => {
     if (evt.keyCode === 13 && state.newTodoText.trim().length > 0) {
       console.log("Enter key pressed:", state.newTodoText);
-      dispatch({
-        type: "addTodo",
-        payload: { newTodoText: state.newTodoText.trim() },
-      });
+      //dispatch({type: "addTodo",payload: { newTodoText: state.newTodoText.trim() },});
+      addTodo({ variables: { text: state.newTodoText.trim() } });
+      dispatch({ type: "setNewTodoText", payload: "" });
+      refetch();
     }
   };
-
-  
-
-  const onClear = () => {
-    console.log("call on clear");
-    dispatch({ type: "clearTodo" });
+  const onComplete = (id) => {
+    dispatch({ type: "completeTodo", payload: { id } });
   };
 
-  // const onFilterAll = () => {
-  //   console.log("Click on Filter all: ");
-  //   dispatch({ type: "filterAllTodo" });
-  // };
+  const onDelete = (id) => {
+    dispatch({ type: "deleteTodo", payload: { id } });
+  };
 
-  // const onFilterActive = () => {
-  //   console.log("Click on Filter Active: ");
-  //   dispatch({ type: "filterActiveTodo" });
-  // };
+  const onChangeText = (id, text) => {
+    dispatch({ type: "changeTodo", payload: { id, text } });
+  };
+  const onClearComplete = () => {
+    dispatch({ type: "clearComplete" });
+  };
 
-  const onFilterTodoListByStatus = (selectedFilter) => {
-    console.log("Click on Filter By Status: ", selectedFilter);
+  const onSetSelectedFilter = (val) => {
     dispatch({
-      type: "filterTodoListByStatus",
-      payload: { selectedFilter: selectedFilter },
+      type: "setSelectedFilter",
+      payload: val,
     });
   };
 
+  useEffect(() => {
+    console.log("data:", data);
+    dispatch({
+      type: "setData",
+      payload: data && data.todos ? data.todos : [],
+    });
+  }, [data]); 
+
+  
   
 
   return (
@@ -269,20 +234,56 @@ function App() {
           <input id="toggle-all" className="toggle-all" type="checkbox" />
           <label htmlFor="toggle-all">Mark all as complete</label>
           <ul className="todo-list">
-            {console.log("Filter Todos:", state.filterTodos)}
-            <ToDoList todos={state.filterTodos.length === 0 ? state.todos : state.filterTodos} dispatch={dispatch}/>
+            {state.todos.map((itm, index) => {
+              if (
+                state.selectedFilter === "" ||
+                state.selectedFilter === itm.status
+              ) {
+                return (
+                  <li
+                    key={itm.id}
+                    className={itm.status === "COMPLETED" ? "completed" : ""}
+                  >
+                    <div className="view">
+                      <input
+                        className="toggle1"
+                        type="checkbox"
+                        checked={itm.status === "COMPLETED" ? true : false}
+                        onChange={() => {
+                          onComplete(itm.id);
+                        }}
+                      />
+                      {itm.status === "COMPLETED" ? (
+                        <label>{itm.text}</label>
+                      ) : (
+                        <input
+                          className="edit"
+                          value={itm.text}
+                          onChange={(evt) => {
+                            console.log(evt.target.value);
+                            onChangeText(itm.id, evt.target.value);
+                          }}
+                        />
+                      )}
+                      <button
+                        className="destroy"
+                        onClick={() => {
+                          onDelete(itm.id);
+                        }}
+                      ></button>
+                    </div>
+                  </li>
+                );
+              } else {
+                return null;
+              }
+            })}
           </ul>
         </section>
         <footer className="footer">
           <span className="todo-count">
-            <strong>
-              {state.todos.filter((c) => c.status !== "COMPLETED").length}
-            </strong>{" "}
-            item
-            {state.todos.filter((c) => (c.status !== "COMPLETED").length) > 0
-              ? "s"
-              : ""}{" "}
-            left
+            <strong>{state.todos.length}</strong> item
+            {state.todos.length > 1 ? "s" : ""} left
           </span>
 
           <Filter
@@ -290,15 +291,11 @@ function App() {
             titleForActive={state.titleForActive}
             titleForCompleted={state.titleForCompleted}
             selected={state.selectedFilter}
-            //onFilterAll={onFilterAll}
-            //onFilterActive={onFilterActive}
-            onFilterTodoListByStatus={onFilterTodoListByStatus}
+            onChange={onSetSelectedFilter}
           />
           <button
             className="clear-completed"
-            onClick={() => {
-              onClear();
-            }}
+            onClick={ onClearComplete }
           >
             Clear completed
           </button>
